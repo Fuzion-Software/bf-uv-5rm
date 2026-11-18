@@ -22,6 +22,7 @@ ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_FW_REPO = "Fuzion-Software/bf-uv-5rm-firmware-open"
 DEFAULT_TOOL_REPO = "Fuzion-Software/open-ht-tool"
 SEMVER_RE = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)$")
+GITHUB_REPO_RE = re.compile(r"github\.com[:/]([^/]+/[^/]+?)(?:\.git)?/?$")
 
 PLATFORMS: tuple[tuple[str, str], ...] = (
     ("windows-amd64", ".exe"),
@@ -61,11 +62,22 @@ def parse_semver(tag: str) -> tuple[int, int, int] | None:
     return int(m.group(1)), int(m.group(2)), int(m.group(3))
 
 
-def latest_semver_tag() -> str | None:
+def resolve_github_repo(remote: str = "origin") -> str | None:
+    url = run_cmd(["git", "remote", "get-url", remote], capture=True, check=False)
+    if not url:
+        return None
+    m = GITHUB_REPO_RE.search(url.strip())
+    return m.group(1) if m else None
+
+
+def latest_semver_tag(repo: str | None = None) -> str | None:
     candidates: list[tuple[tuple[int, int, int], str]] = []
 
+    gh_cmd = ["gh", "release", "list", "--limit", "50", "--json", "tagName"]
+    if repo:
+        gh_cmd.extend(["--repo", repo])
     res = subprocess.run(
-        ["gh", "release", "list", "--limit", "50", "--json", "tagName"],
+        gh_cmd,
         cwd=ROOT,
         text=True,
         capture_output=True,
@@ -107,12 +119,15 @@ def bump_semver(base_tag: str | None, level: str) -> str:
     raise ValueError(f"Unknown bump level: {level}")
 
 
-def tag_or_release_exists(tag: str) -> bool:
+def tag_or_release_exists(tag: str, repo: str | None = None) -> bool:
     local = run_cmd(["git", "tag", "-l", tag], capture=True, check=False)
     if local == tag:
         return True
+    gh_cmd = ["gh", "release", "view", tag]
+    if repo:
+        gh_cmd.extend(["--repo", repo])
     gh_res = subprocess.run(
-        ["gh", "release", "view", tag],
+        gh_cmd,
         cwd=ROOT,
         text=True,
         capture_output=True,
@@ -125,7 +140,15 @@ def fetch_release_metadata(repo: str, requested_tag: str) -> UpstreamRelease:
     if requested_tag != "latest":
         cmd.append(requested_tag)
     cmd.extend(["--repo", repo, "--json", "tagName,assets"])
-    raw = run_cmd(cmd, capture=True)
+    try:
+        raw = run_cmd(cmd, capture=True)
+    except subprocess.CalledProcessError as e:
+        detail = (e.stderr or e.stdout or "").strip()
+        suffix = f" ({detail})" if detail else ""
+        raise RuntimeError(
+            f"Could not fetch release {requested_tag!r} from {repo}; "
+            f"ensure a published release exists there{suffix}"
+        ) from e
     data = json.loads(raw)
     tag = data["tagName"]
     names = [a["name"] for a in data.get("assets", []) if isinstance(a.get("name"), str)]
@@ -361,11 +384,11 @@ def build_platform_bundles(
     return [*bundles, sums_out], manifest
 
 
-def resolve_release_tag(target: str) -> str:
+def resolve_release_tag(target: str, repo: str | None = None) -> str:
     clean = target.strip()
     if clean in ("auto", "micro", "minor", "major"):
         level = "micro" if clean == "auto" else clean
-        latest = latest_semver_tag()
+        latest = latest_semver_tag(repo)
         tag = bump_semver(latest, level)
         print(f"Latest release/tag: {latest or '(none)'} -> bumping {level} to {tag}")
         return tag
@@ -420,28 +443,31 @@ def main() -> int:
     ap.add_argument("--bundle-only", action="store_true", help="Write dist/*.zip and SHA256SUMS without creating a GitHub release")
     ap.add_argument("--draft", action="store_true", help="Create GitHub release as a draft")
     ap.add_argument("--dry-run", action="store_true", help="Resolve tags and print planned bundles without modifying dist/ or publishing")
+    ap.add_argument("--repo", default=None, help="Target GitHub repository (owner/name); defaults to git remote 'origin'")
     args = ap.parse_args()
 
+    repo = args.repo or resolve_github_repo("origin")
+
     try:
-        tag = resolve_release_tag(args.target)
+        tag = resolve_release_tag(args.target, repo)
     except ValueError as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
 
-    if not args.bundle_only and not args.dry_run and tag_or_release_exists(tag):
+    if not args.bundle_only and not args.dry_run and tag_or_release_exists(tag, repo):
         print(f"error: tag or GitHub release {tag!r} already exists", file=sys.stderr)
         return 1
 
-    if args.local_fw_zip is not None:
-        fw_tag = args.fw_tag if args.fw_tag != "latest" else "local"
-        fw_bundle_name = args.local_fw_zip.name
-    else:
-        if args.dry_run:
+    try:
+        if args.local_fw_zip is not None:
+            fw_tag = args.fw_tag if args.fw_tag != "latest" else "local"
+            fw_bundle_name = args.local_fw_zip.name
+        elif args.dry_run:
             try:
                 fw_rel = fetch_release_metadata(args.fw_repo, args.fw_tag)
                 fw_tag = fw_rel.tag
                 fw_bundle_name = find_fw_bundle_name(fw_rel.asset_names)
-            except subprocess.CalledProcessError:
+            except (subprocess.CalledProcessError, RuntimeError, FileNotFoundError):
                 fw_tag = args.fw_tag
                 fw_bundle_name = "bf-uv-5rm-fw-<tag>.zip"
         else:
@@ -449,99 +475,106 @@ def main() -> int:
             fw_tag = fw_rel.tag
             fw_bundle_name = find_fw_bundle_name(fw_rel.asset_names)
 
-    if args.local_tool_dir is not None:
-        tool_tag = args.tool_tag if args.tool_tag != "latest" else "local"
-    elif args.dry_run:
-        try:
+        if args.local_tool_dir is not None:
+            tool_tag = args.tool_tag if args.tool_tag != "latest" else "local"
+        elif args.dry_run:
+            try:
+                tool_rel = fetch_release_metadata(args.tool_repo, args.tool_tag)
+                tool_tag = tool_rel.tag
+            except (subprocess.CalledProcessError, RuntimeError):
+                tool_tag = args.tool_tag
+        else:
             tool_rel = fetch_release_metadata(args.tool_repo, args.tool_tag)
             tool_tag = tool_rel.tag
-        except subprocess.CalledProcessError:
-            tool_tag = args.tool_tag
-    else:
-        tool_rel = fetch_release_metadata(args.tool_repo, args.tool_tag)
-        tool_tag = tool_rel.tag
 
-    if args.dry_run:
-        action = "build local bundles" if args.bundle_only else "create GitHub release"
-        print(f"[dry-run] Would {action} {tag}")
-        print(f"[dry-run] Firmware: {args.fw_repo} @ {fw_tag} ({fw_bundle_name})")
-        print(f"[dry-run] Tool:     {args.tool_repo} @ {tool_tag}")
-        for platform, _ in PLATFORMS:
-            print(f"[dry-run] Bundle:   dist/bf-uv-5rm-{tag}-{platform}.zip")
-        print("[dry-run] Checksum: dist/SHA256SUMS")
-        return 0
+        if args.dry_run:
+            action = "build local bundles" if args.bundle_only else "create GitHub release"
+            print(f"[dry-run] Would {action} {tag}")
+            print(f"[dry-run] Firmware: {args.fw_repo} @ {fw_tag} ({fw_bundle_name})")
+            print(f"[dry-run] Tool:     {args.tool_repo} @ {tool_tag}")
+            for platform, _ in PLATFORMS:
+                print(f"[dry-run] Bundle:   dist/bf-uv-5rm-{tag}-{platform}.zip")
+            print("[dry-run] Checksum: dist/SHA256SUMS")
+            return 0
 
-    with tempfile.TemporaryDirectory(prefix="bf-uv-5rm-bundle-") as tmp:
-        tmp_dir = Path(tmp)
-        fw_stage = tmp_dir / "fw"
-        fw_extract = tmp_dir / "fw_extract"
-        tool_stage = tmp_dir / "tool"
-        fw_stage.mkdir()
-        fw_extract.mkdir()
-        tool_stage.mkdir()
+        with tempfile.TemporaryDirectory(prefix="bf-uv-5rm-bundle-") as tmp:
+            tmp_dir = Path(tmp)
+            fw_stage = tmp_dir / "fw"
+            fw_extract = tmp_dir / "fw_extract"
+            tool_stage = tmp_dir / "tool"
+            fw_stage.mkdir()
+            fw_extract.mkdir()
+            tool_stage.mkdir()
 
-        if args.local_fw_zip is not None:
-            fw_zip_path = args.local_fw_zip.resolve()
-        else:
-            download_release_patterns(args.fw_repo, fw_tag, fw_stage, [fw_bundle_name])
-            fw_zip_path = fw_stage / fw_bundle_name
+            if args.local_fw_zip is not None:
+                fw_zip_path = args.local_fw_zip.resolve()
+            else:
+                download_release_patterns(args.fw_repo, fw_tag, fw_stage, [fw_bundle_name])
+                fw_zip_path = fw_stage / fw_bundle_name
 
-        fw_entries = extract_and_validate_fw_zip(fw_zip_path, fw_extract)
+            fw_entries = extract_and_validate_fw_zip(fw_zip_path, fw_extract)
 
-        if args.local_tool_dir is not None:
-            tool_source = args.local_tool_dir.resolve()
-            for item in tool_source.iterdir():
-                if item.is_file() and (item.name.startswith("open-ht-tool-") or item.name == "SHA256SUMS"):
-                    shutil.copy2(item, tool_stage / item.name)
-        else:
-            download_release_patterns(
-                args.tool_repo,
-                tool_tag,
-                tool_stage,
-                ["open-ht-tool-*", "SHA256SUMS"],
+            if args.local_tool_dir is not None:
+                tool_source = args.local_tool_dir.resolve()
+                for item in tool_source.iterdir():
+                    if item.is_file() and (
+                        item.name.startswith("open-ht-tool-") or item.name == "SHA256SUMS"
+                    ):
+                        shutil.copy2(item, tool_stage / item.name)
+            else:
+                download_release_patterns(
+                    args.tool_repo,
+                    tool_tag,
+                    tool_stage,
+                    ["open-ht-tool-*", "SHA256SUMS"],
+                )
+
+            dist_dir = ROOT / "dist"
+            for old in dist_dir.glob(f"bf-uv-5rm-{tag}-*.zip"):
+                old.unlink()
+
+            assets, manifest = build_platform_bundles(
+                release_tag=tag,
+                fw_entries=fw_entries,
+                tool_dir=tool_stage,
+                dist_dir=dist_dir,
+                fw_tag=fw_tag,
+                tool_tag=tool_tag,
             )
 
-        dist_dir = ROOT / "dist"
-        for old in dist_dir.glob(f"bf-uv-5rm-{tag}-*.zip"):
-            old.unlink()
+        for zip_name, members in manifest.items():
+            print(f"[ok] dist/{zip_name} ({len(members)} entries)")
 
-        assets, manifest = build_platform_bundles(
-            release_tag=tag,
-            fw_entries=fw_entries,
-            tool_dir=tool_stage,
-            dist_dir=dist_dir,
-            fw_tag=fw_tag,
-            tool_tag=tool_tag,
-        )
+        if args.bundle_only:
+            print(f"Created {len(assets)} release artifacts in dist/")
+            return 0
 
-    for zip_name, members in manifest.items():
-        print(f"[ok] dist/{zip_name} ({len(members)} entries)")
-
-    if args.bundle_only:
-        print(f"Created {len(assets)} release artifacts in dist/")
-        return 0
-
-    notes = make_release_notes(tag, args.fw_repo, fw_tag, args.tool_repo, tool_tag, assets)
-    notes_file = ROOT / "dist" / f"RELEASE_NOTES_{tag}.md"
-    notes_file.write_text(notes, encoding="utf-8")
-    try:
-        cmd = [
-            "gh",
-            "release",
-            "create",
-            tag,
-            "--title",
-            f"bf-uv-5rm {tag} (FW {fw_tag} + open-ht-tool {tool_tag})",
-            "--notes-file",
-            str(notes_file),
-        ]
-        if args.draft:
-            cmd.append("--draft")
-        cmd.extend(str(a) for a in assets)
-        run_cmd(cmd)
-    finally:
-        if notes_file.exists():
-            notes_file.unlink()
+        notes = make_release_notes(tag, args.fw_repo, fw_tag, args.tool_repo, tool_tag, assets)
+        notes_file = ROOT / "dist" / f"RELEASE_NOTES_{tag}.md"
+        notes_file.write_text(notes, encoding="utf-8")
+        try:
+            cmd = [
+                "gh",
+                "release",
+                "create",
+                tag,
+                "--title",
+                f"bf-uv-5rm {tag} (FW {fw_tag} + open-ht-tool {tool_tag})",
+                "--notes-file",
+                str(notes_file),
+            ]
+            if repo:
+                cmd.extend(["--repo", repo])
+            if args.draft:
+                cmd.append("--draft")
+            cmd.extend(str(a) for a in assets)
+            run_cmd(cmd)
+        finally:
+            if notes_file.exists():
+                notes_file.unlink()
+    except (RuntimeError, FileNotFoundError, ValueError, subprocess.CalledProcessError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
 
     print(f"Created GitHub release {tag}")
     return 0

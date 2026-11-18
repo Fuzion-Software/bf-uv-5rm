@@ -136,6 +136,16 @@ class BundleReleaseTests(unittest.TestCase):
             )
             self.assertIn("bf-uv-5rm-v0.0.0-linux-amd64.zip", res.stdout)
 
+    def test_fetch_release_metadata_surfaces_clear_error(self) -> None:
+        from unittest import mock
+
+        err = subprocess.CalledProcessError(1, ["gh"], stderr="no releases found")
+        with mock.patch.object(br, "run_cmd", side_effect=err):
+            with self.assertRaises(RuntimeError) as ctx:
+                br.fetch_release_metadata("Fuzion-Software/bf-uv-5rm-firmware-open", "latest")
+        self.assertIn("Fuzion-Software/bf-uv-5rm-firmware-open", str(ctx.exception))
+        self.assertIn("no releases found", str(ctx.exception))
+
 
 if __name__ == "__main__":
     unittest.main()

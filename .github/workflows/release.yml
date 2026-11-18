@@ -1,0 +1,60 @@
+name: Release Bundled UV-5RM Package
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (vX.Y.Z) or bump level (micro, minor, major)"
+        required: true
+        default: "micro"
+        type: string
+      fw_tag:
+        description: "Fuzion-Software/bf-uv-5rm-firmware-open release tag or 'latest'"
+        required: true
+        default: "latest"
+        type: string
+      tool_tag:
+        description: "Fuzion-Software/open-ht-tool release tag or 'latest'"
+        required: true
+        default: "latest"
+        type: string
+      draft:
+        description: "Create GitHub release as a draft"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run unit tests
+        run: python3 -m unittest discover -s tests -v
+
+      - name: Download upstream releases and publish combined bundles
+        env:
+          GH_TOKEN: ${{ github.token }}
+          UPSTREAM_TOKEN: ${{ secrets.UPSTREAM_TOKEN || github.token }}
+        run: |
+          args=(
+            "${{ inputs.version }}"
+            --fw-tag "${{ inputs.fw_tag }}"
+            --tool-tag "${{ inputs.tool_tag }}"
+          )
+          if [ "${{ inputs.draft }}" = "true" ]; then
+            args+=(--draft)
+          fi
+          python3 scripts/bundle_release.py "${args[@]}"

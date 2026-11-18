@@ -1,0 +1,64 @@
+version: '3'
+
+vars:
+  PYTHON: '{{.PYTHON | default "python3"}}'
+  VERSION: '{{.VERSION | default (.BUMP | default "micro")}}'
+  FW_TAG: '{{.FW_TAG | default "latest"}}'
+  TOOL_TAG: '{{.TOOL_TAG | default "latest"}}'
+  RELEASE_FLAGS: '{{.RELEASE_FLAGS | default ""}}'
+
+tasks:
+  default:
+    desc: List available tasks
+    cmds:
+      - go-task --list
+
+  test:
+    desc: Run unit tests for bundle packaging and checksum verification
+    cmds:
+      - '{{.PYTHON}} -m unittest discover -s tests -v'
+
+  bundle:
+    desc: Download upstream releases and build per-platform zips locally in dist/
+    cmds:
+      - '{{.PYTHON}} scripts/bundle_release.py {{.VERSION}} --fw-tag {{.FW_TAG}} --tool-tag {{.TOOL_TAG}} --bundle-only {{.RELEASE_FLAGS}}'
+
+  bundle:local:
+    desc: Build per-platform zips locally using local sibling firmware/tool builds
+    cmds:
+      - '{{.PYTHON}} scripts/bundle_release.py {{.VERSION}} --local-fw-zip {{.LOCAL_FW_ZIP}} --local-tool-dir {{.LOCAL_TOOL_DIR | default "../../open-ht-tool/dist"}} --bundle-only {{.RELEASE_FLAGS}}'
+
+  release:
+    desc: Download upstream releases, bundle per-platform zips, and publish a GitHub release
+    cmds:
+      - '{{.PYTHON}} scripts/bundle_release.py {{.VERSION}} --fw-tag {{.FW_TAG}} --tool-tag {{.TOOL_TAG}} {{.RELEASE_FLAGS}}'
+
+  release:micro:
+    desc: Bump micro (patch) version and publish a bundled GitHub release
+    cmds:
+      - '{{.PYTHON}} scripts/bundle_release.py micro --fw-tag {{.FW_TAG}} --tool-tag {{.TOOL_TAG}} {{.RELEASE_FLAGS}}'
+
+  release:minor:
+    desc: Bump minor version and publish a bundled GitHub release
+    cmds:
+      - '{{.PYTHON}} scripts/bundle_release.py minor --fw-tag {{.FW_TAG}} --tool-tag {{.TOOL_TAG}} {{.RELEASE_FLAGS}}'
+
+  release:major:
+    desc: Bump major version and publish a bundled GitHub release
+    cmds:
+      - '{{.PYTHON}} scripts/bundle_release.py major --fw-tag {{.FW_TAG}} --tool-tag {{.TOOL_TAG}} {{.RELEASE_FLAGS}}'
+
+  release:draft:
+    desc: Download upstream releases, bundle per-platform zips, and create a draft GitHub release
+    cmds:
+      - '{{.PYTHON}} scripts/bundle_release.py {{.VERSION}} --fw-tag {{.FW_TAG}} --tool-tag {{.TOOL_TAG}} --draft {{.RELEASE_FLAGS}}'
+
+  release:dry-run:
+    desc: Preview resolved upstream tags and planned release bundles without modifying dist/ or publishing
+    cmds:
+      - '{{.PYTHON}} scripts/bundle_release.py {{.VERSION}} --fw-tag {{.FW_TAG}} --tool-tag {{.TOOL_TAG}} --dry-run {{.RELEASE_FLAGS}}'
+
+  clean:
+    desc: Remove generated dist/ bundles
+    cmds:
+      - rm -rf dist

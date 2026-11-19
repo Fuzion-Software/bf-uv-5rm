@@ -18,8 +18,8 @@ Inside every zip, the tools are simply named `open-ht-tool` (and `GUI_open-ht-to
 ## End-User Quick Start
 
 ### Option 1 — Double-Clickable Installer Script (Bypasses Browser Quarantine)
-- **macOS / Linux:** Double-click [`install.command`](install.command) (or run `./install.sh`), press **Enter** to accept the current directory (or type a custom folder), and it will automatically detect your OS/CPU (`mac-m1-bf-uv-5rm`, `mac-intel-bf-uv-5rm`, `linux-x64-bf-uv-5rm`, or `linux-arm64-bf-uv-5rm`), download the latest release zip via `curl`, and unzip it ready to run.
-- **Windows:** Double-click [`install.bat`](install.bat) to download and extract the latest `windows-bf-uv-5rm-<version>.zip` bundle.
+- **macOS / Linux:** Double-click [`install.command`](install.command) (or run `./install.sh [target_dir]`) to automatically detect your OS/CPU (`mac-m1-bf-uv-5rm`, `mac-intel-bf-uv-5rm`, `linux-x64-bf-uv-5rm`, or `linux-arm64-bf-uv-5rm`), download the latest release zip via `curl`, and unzip it into the current directory (or `target_dir` if provided).
+- **Windows:** Double-click [`install.bat`](install.bat) (or run `install.bat [target_dir]`) to download and extract the latest `windows-bf-uv-5rm-<version>.zip` bundle into the current directory.
 
 ### Option 2 — Direct Release Zip
 1. Download and extract the zip for your computer.

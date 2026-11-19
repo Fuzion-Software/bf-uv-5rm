@@ -86,6 +86,24 @@ class BundleReleaseTests(unittest.TestCase):
             self.assertIn("open-ht-tool", manifest["mac-intel-bf-uv-5rm-v0.1.0.zip"])
             self.assertIn("open-ht-tool", manifest["linux-arm64-bf-uv-5rm-v0.1.0.zip"])
 
+            # Verify macOS .app.zip repackaging as GUI_open-ht-tool.app
+            mac_app_zip = tool_dir / "open-ht-tool-gui-darwin-arm64.app.zip"
+            with zipfile.ZipFile(mac_app_zip, "w") as zf:
+                zf.writestr("open-ht-tool.app/Contents/Info.plist", "<plist/>")
+                zf.writestr("open-ht-tool.app/Contents/MacOS/open-ht-tool-gui", b"MACAPPBIN")
+            _, mac_manifest = br.build_platform_bundles(
+                release_tag="v0.1.0",
+                fw_entries=fw_entries,
+                tool_dir=tool_dir,
+                dist_dir=dist,
+                fw_tag="v0.1.0",
+                tool_tag="v0.2.0",
+            )
+            self.assertIn(
+                "GUI_open-ht-tool.app/Contents/MacOS/open-ht-tool-gui",
+                mac_manifest["mac-m1-bf-uv-5rm-v0.1.0.zip"],
+            )
+
             lin_zip = dist / "linux-x64-bf-uv-5rm-v0.1.0.zip"
             with zipfile.ZipFile(lin_zip, "r") as zf:
                 cli_info = zf.getinfo("open-ht-tool")

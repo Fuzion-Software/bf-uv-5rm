@@ -7,10 +7,9 @@ echo ========================================================
 echo.
 
 cd /d "%~dp0"
-set "DEFAULT_DIR=%CD%"
-set "TARGET_DIR="
-set /p "TARGET_DIR=Install directory [%DEFAULT_DIR%]: "
-if "!TARGET_DIR!"=="" set "TARGET_DIR=%DEFAULT_DIR%"
+set "TARGET_DIR=%~1"
+if "!TARGET_DIR!"=="" set "TARGET_DIR=%CD%"
+echo Install directory: !TARGET_DIR!
 
 if not exist "!TARGET_DIR!" (
     mkdir "!TARGET_DIR!" || (

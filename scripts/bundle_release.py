@@ -366,6 +366,9 @@ def build_platform_bundles(
         gui_path = tool_dir / src_gui_name
         has_gui = gui_path.is_file()
 
+        src_mac_app_zip = tool_dir / f"open-ht-tool-gui-{target.upstream_id}.app.zip"
+        has_mac_app = target.upstream_id.startswith("darwin-") and src_mac_app_zip.is_file()
+
         zip_cli_name = f"open-ht-tool{target.ext}"
         zip_gui_name = f"GUI_open-ht-tool{target.ext}"
 
@@ -385,10 +388,31 @@ def build_platform_bundles(
                 write_zip_entry(zf, gui_path, zip_gui_name, executable=is_unix)
                 included.append(zip_gui_name)
 
+            if has_mac_app:
+                with zipfile.ZipFile(src_mac_app_zip, "r") as app_zf:
+                    for info in app_zf.infolist():
+                        if info.is_dir():
+                            continue
+                        parts = Path(info.filename).parts
+                        if not parts or not parts[0].endswith(".app"):
+                            continue
+                        rel_inside = Path(*parts[1:])
+                        arcname = (Path("GUI_open-ht-tool.app") / rel_inside).as_posix()
+                        zi = zipfile.ZipInfo(arcname)
+                        zi.create_system = 3
+                        zi.compress_type = zipfile.ZIP_DEFLATED
+                        zi.date_time = info.date_time
+                        is_exec = "/Contents/MacOS/" in f"/{arcname}" or bool((info.external_attr >> 16) & 0o111)
+                        mode = 0o100755 if is_exec else 0o100644
+                        zi.external_attr = mode << 16
+                        zf.writestr(zi, app_zf.read(info.filename))
+                        included.append(arcname)
+
+            gui_label = "GUI_open-ht-tool.app" if has_mac_app else (zip_gui_name if has_gui else None)
             quickstart = make_quickstart_text(
                 target=target,
                 cli_name=zip_cli_name,
-                gui_name=zip_gui_name if has_gui else None,
+                gui_name=gui_label,
                 release_tag=release_tag,
                 fw_tag=fw_tag,
                 tool_tag=tool_tag,

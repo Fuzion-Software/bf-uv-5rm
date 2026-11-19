@@ -118,13 +118,9 @@ echo ""
 BUNDLE_PREFIX="$(detect_bundle_prefix)"
 echo "Detected platform bundle: ${BUNDLE_PREFIX}"
 
-DEFAULT_DIR="$(pwd)"
-read -r -p "Install directory [${DEFAULT_DIR}]: " INPUT_DIR || INPUT_DIR=""
-INPUT_DIR="${INPUT_DIR#"${INPUT_DIR%%[![:space:]]*}"}"
-INPUT_DIR="${INPUT_DIR%"${INPUT_DIR##*[![:space:]]}"}"
-
+INPUT_DIR="${1:-}"
 if [ -z "$INPUT_DIR" ]; then
-    TARGET_DIR="$DEFAULT_DIR"
+    TARGET_DIR="$(pwd)"
 else
     # Expand leading ~ to $HOME
     case "$INPUT_DIR" in
@@ -136,6 +132,7 @@ fi
 
 mkdir -p "$TARGET_DIR"
 TARGET_DIR="$(cd "$TARGET_DIR" && pwd)"
+echo "Install directory: ${TARGET_DIR}"
 
 if [ -z "$TAG" ]; then
     echo "Checking latest release from ${REPO}..."
@@ -173,6 +170,7 @@ fi
 
 # Ensure tool binaries are executable and clear any macOS quarantine attributes
 chmod +x "${TARGET_DIR}/open-ht-tool" "${TARGET_DIR}/GUI_open-ht-tool" 2>/dev/null || true
+chmod +x "${TARGET_DIR}/GUI_open-ht-tool.app/Contents/MacOS/"* 2>/dev/null || true
 if [ "$(uname -s)" = "Darwin" ] && command -v xattr >/dev/null 2>&1; then
     xattr -cr "$TARGET_DIR" 2>/dev/null || true
 fi
@@ -186,7 +184,9 @@ echo "  1. Bootloader mode (hold Side1 + Side2 + Power ON):"
 echo "     \"${TARGET_DIR}/open-ht-tool\" flash \"${TARGET_DIR}/bf-uv-5rm-fw.BF\""
 echo "  2. Normal standby mode (install overlay apps + boot logo):"
 echo "     \"${TARGET_DIR}/open-ht-tool\" install-all --apps-dir \"${TARGET_DIR}/apps\""
-if [ -f "${TARGET_DIR}/GUI_open-ht-tool" ] || [ -f "${TARGET_DIR}/GUI_open-ht-tool.exe" ]; then
+if [ -d "${TARGET_DIR}/GUI_open-ht-tool.app" ]; then
+    echo "  Or open the GUI: \"${TARGET_DIR}/GUI_open-ht-tool.app\""
+elif [ -f "${TARGET_DIR}/GUI_open-ht-tool" ] || [ -f "${TARGET_DIR}/GUI_open-ht-tool.exe" ]; then
     echo "  Or launch the GUI: \"${TARGET_DIR}/GUI_open-ht-tool\""
 fi
 

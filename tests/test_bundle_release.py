@@ -116,13 +116,28 @@ class BundleReleaseTests(unittest.TestCase):
                 self.assertEqual((bf_info.external_attr >> 16) & 0o777, 0o644)
                 qs = zf.read("QUICKSTART.txt").decode("utf-8")
                 self.assertIn("GUI_open-ht-tool", qs)
+                self.assertIn("Side Button 1 + Side Button 2", qs)
+                self.assertIn("Full Install", qs)
+                self.assertIn("individually", qs)
+                self.assertIn("Manage Channels", qs)
+                self.assertIn("CHIRP", qs)
                 self.assertIn("./open-ht-tool flash bf-uv-5rm-fw.BF", qs)
 
             mac_zip = dist / "mac-m1-bf-uv-5rm-v0.1.0.zip"
             with zipfile.ZipFile(mac_zip, "r") as zf:
                 mac_qs = zf.read("QUICKSTART.txt").decode("utf-8")
                 self.assertIn("xattr -cr .", mac_qs)
+                self.assertIn("GUI_open-ht-tool.app", mac_qs)
+                self.assertIn("Full Install", mac_qs)
+                self.assertIn("Manage Channels", mac_qs)
                 self.assertIn("./open-ht-tool flash bf-uv-5rm-fw.BF", mac_qs)
+
+            win_zip = dist / "windows-bf-uv-5rm-v0.1.0.zip"
+            with zipfile.ZipFile(win_zip, "r") as zf:
+                win_qs = zf.read("QUICKSTART.txt").decode("utf-8")
+                self.assertIn("GUI_open-ht-tool.exe", win_qs)
+                self.assertIn("SmartScreen", win_qs)
+                self.assertIn("open-ht-tool.exe flash bf-uv-5rm-fw.BF", win_qs)
 
     def test_missing_app_in_fw_zip_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -181,6 +196,37 @@ class BundleReleaseTests(unittest.TestCase):
                 br.fetch_release_metadata("Fuzion-Software/bf-uv-5rm-firmware-open", "latest")
         self.assertIn("Fuzion-Software/bf-uv-5rm-firmware-open", str(ctx.exception))
         self.assertIn("no releases found", str(ctx.exception))
+
+    def test_make_release_notes_includes_flashing_instructions(self) -> None:
+        assets = [Path(t.zip_name("v0.1.0")) for t in br.PLATFORMS]
+        notes = br.make_release_notes(
+            tag="v0.1.0",
+            fw_repo=br.DEFAULT_FW_REPO,
+            fw_tag="v0.2.0",
+            tool_repo=br.DEFAULT_TOOL_REPO,
+            tool_tag="v0.0.8",
+            assets=assets,
+        )
+        for expected in (
+            "### Flashing Instructions",
+            "install.command",
+            "install.sh",
+            "install.bat",
+            "curl -fsSL",
+            "Navigate to the folder",
+            "Plug the radio in",
+            "Side Button 1 + Side Button 2",
+            "GUI_open-ht-tool.app",
+            "GUI_open-ht-tool.exe",
+            "auto-detected",
+            "Full Install",
+            "individually",
+            "Manage Channels",
+            "CHIRP",
+            "windows-bf-uv-5rm-v0.1.0.zip",
+            "mac-m1-bf-uv-5rm-v0.1.0.zip",
+        ):
+            self.assertIn(expected, notes)
 
 
 if __name__ == "__main__":

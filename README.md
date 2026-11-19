@@ -13,11 +13,13 @@ and produces ready-to-run per-platform zip archives plus `SHA256SUMS`:
 - `linux-x64-bf-uv-5rm-<version>.zip` — Linux x64
 - `linux-arm64-bf-uv-5rm-<version>.zip` — Linux ARM64
 
-Inside every zip, the tools are simply named `open-ht-tool` (and `GUI_open-ht-tool` where available, `.exe` on Windows) alongside `bf-uv-5rm-fw.BF`, `apps/`, `logo/boot.png`, and `QUICKSTART.txt`.
+Inside every zip, the tools are simply named `open-ht-tool` and `GUI_open-ht-tool` (`.app` on macOS, `.exe` on Windows, where available) alongside `bf-uv-5rm-fw.BF`, `apps/`, `logo/boot.png`, and `QUICKSTART.txt`.
 
-## End-User Quick Start
+## Flashing Instructions
 
-### Option 1 — Installer Script (Bypasses Browser Quarantine)
+### 1. Download the Release
+
+#### Option A — Installer Script (Recommended, Bypasses Browser Quarantine)
 
 Download and run the installer script for your OS from the command line (this avoids browser quarantine flags), or double-click it after downloading:
 
@@ -44,28 +46,71 @@ Download and run the installer script for your OS from the command line (this av
   ```
   *(Or in PowerShell: `Invoke-WebRequest -Uri https://raw.githubusercontent.com/Fuzion-Software/bf-uv-5rm/main/install.bat -OutFile install.bat; .\install.bat`. You can also double-click [`install.bat`](install.bat) or pass `[target_dir]`.)*
 
-### Option 2 — Direct Release Zip
-1. Download and extract the zip for your computer.
-2. **macOS only (if downloaded via a web browser):** macOS Gatekeeper attaches a quarantine attribute to browser downloads and may block unsigned scripts or binaries ("cannot be opened because the developer cannot be verified"). Clear it in Terminal before running:
-   ```sh
-   # Clear quarantine on an extracted release folder:
-   xattr -cr /path/to/extracted-folder
+#### Option B — Direct Release Zip
 
-   # Or, if you downloaded install.command via a browser:
-   xattr -cr ~/Downloads/install.command
-   chmod +x ~/Downloads/install.command
-   ```
-3. **Option A — GUI:**
-   Open `GUI_open-ht-tool` (`GUI_open-ht-tool.exe` on Windows) directly from the extracted folder (it auto-detects `bf-uv-5rm-fw.BF`, `apps/`, and `logo/boot.png` next to it).
-4. **Option B — Command Line:**
-   ```sh
-   # 1. Bootloader mode (hold Side1 + Side2 while powering ON):
-   ./open-ht-tool flash bf-uv-5rm-fw.BF
+Download and extract the zip for your computer from the [Releases](https://github.com/Fuzion-Software/bf-uv-5rm/releases) page.
 
-   # 2. Reboot normally to standby screen, then install overlay apps + boot logo:
-   ./open-ht-tool install-all --apps-dir apps
-   ```
-   *(On Windows, run `open-ht-tool.exe` instead.)*
+- **macOS only (if downloaded via a web browser):** macOS Gatekeeper attaches a quarantine attribute to browser downloads and may block unsigned scripts or binaries ("cannot be opened because the developer cannot be verified"). Clear it in Terminal before running:
+  ```sh
+  # Clear quarantine on an extracted release folder:
+  xattr -cr /path/to/extracted-folder
+
+  # Or, if you downloaded install.command via a browser:
+  xattr -cr ~/Downloads/install.command
+  chmod +x ~/Downloads/install.command
+  ```
+
+### 2. Navigate to the Folder
+
+Open the folder where the release was installed or extracted (containing `bf-uv-5rm-fw.BF`, `apps/`, `logo/boot.png`, `QUICKSTART.txt`, and the flashing tools).
+
+### 3. Plug the Radio In
+
+Connect your Baofeng UV-5RM to your computer using the USB programming cable.
+
+### 4. Put the Radio in Bootloader Mode
+
+Hold **Side Button 1 + Side Button 2** while turning the radio **ON**.
+
+### 5. Open the GUI App
+
+Launch the GUI app from the release folder:
+- **macOS:** `GUI_open-ht-tool.app`
+- **Windows:** `GUI_open-ht-tool.exe` *(if Windows SmartScreen prompts, click **More info** -> **Run anyway**)*
+- **Linux:** `GUI_open-ht-tool`
+
+The app automatically detects `bf-uv-5rm-fw.BF`, `apps/`, and `logo/boot.png` next to it.
+
+### 6. Verify or Select the Radio / USB Port
+
+If the radio is not auto-detected, select the radio/USB port manually (and click **Detect Radio** if needed).
+
+If the radio still cannot be detected, something is wrong with one of the previous steps — double-check that the cable is firmly plugged in, the USB port/driver is recognized by your computer, and the radio was powered on in bootloader mode (holding Side Button 1 + Side Button 2 while turning it on).
+
+### 7. Click Full Install
+
+Click **Full Install** to install the firmware, install all apps, and update the boot logo.
+
+### 8. Individual Steps (Optional)
+
+Each step can also be done individually (**Flash Firmware**, **Install All Apps**, or **Update Boot Logo**) if you prefer to run them separately.
+
+### 9. Manage Channels
+
+Use **Manage Channels** to program channels in the radio. It is designed to work with this firmware so that there is no need to use another software such as CHIRP at the moment.
+
+### Alternative — Command Line (CLI)
+
+If you prefer the command line instead of the GUI:
+
+```sh
+# 1. Bootloader mode (hold Side Button 1 + Side Button 2 while powering ON):
+./open-ht-tool flash bf-uv-5rm-fw.BF
+
+# 2. Reboot normally to the standby screen, then install overlay apps + boot logo:
+./open-ht-tool install-all --apps-dir apps
+```
+*(On Windows, run `open-ht-tool.exe` instead.)*
 
 ## Local Usage (`Taskfile` / Python)
 

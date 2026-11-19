@@ -86,7 +86,11 @@ echo.
 echo [OK] Installed !ZIP_NAME! into:
 echo      !TARGET_DIR!
 echo.
-echo You can now launch "!TARGET_DIR!\GUI_open-ht-tool.exe" or "!TARGET_DIR!\open-ht-tool.exe".
+echo Next steps:
+echo   1. Plug the radio in and put it in bootloader mode (hold Side Button 1 + Side Button 2 while turning Power ON).
+echo   2. Open the GUI app: "!TARGET_DIR!\GUI_open-ht-tool.exe"
+echo   3. Verify/select your USB port and click Full Install (use Manage Channels to program channels).
+echo   See "!TARGET_DIR!\QUICKSTART.txt" for full flashing instructions.
 echo.
 pause
 exit /b 0

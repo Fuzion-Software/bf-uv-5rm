@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+DEFAULT_RELEASE_REPO = "Fuzion-Software/bf-uv-5rm"
 DEFAULT_FW_REPO = "Fuzion-Software/bf-uv-5rm-firmware-open"
 DEFAULT_TOOL_REPO = "Fuzion-Software/open-ht-tool"
 SEMVER_RE = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)$")
@@ -286,13 +287,6 @@ def make_quickstart_text(
     tool_tag: str,
 ) -> str:
     prefix = "" if target.ext == ".exe" else "./"
-    gui_line = (
-        f"Option A — GUI (easiest):\n"
-        f"  Open {gui_name}, select your port, and click Full Install (or Flash / Install Apps).\n\n"
-        if gui_name
-        else ""
-    )
-    cli_step = "Option B — Terminal / Command Line" if gui_name else "How to Flash & Install Apps"
     if target.upstream_id.startswith("darwin-"):
         os_note = (
             "First time on Mac (if macOS blocks opening the downloaded tool):\n"
@@ -308,16 +302,39 @@ def make_quickstart_text(
     else:
         os_note = ""
 
+    gui_section = (
+        f"Flashing Instructions (GUI — Recommended):\n"
+        f"1. Download and extract the release (already done if you are reading this file).\n"
+        f"2. Navigate to this extracted release folder (containing bf-uv-5rm-fw.BF, apps/, and logo/boot.png).\n"
+        f"3. Plug the radio into your computer using the USB programming cable.\n"
+        f"4. Put the radio in bootloader mode: hold Side Button 1 + Side Button 2 while turning the radio ON.\n"
+        f"5. Open the GUI app: {gui_name}\n"
+        f"6. If the radio is not auto-detected, select the radio/USB port manually (and click Detect Radio if needed).\n"
+        f"   If the radio still cannot be detected, something is wrong with the previous steps (check the cable,\n"
+        f"   USB port/driver, and that the radio was powered on in bootloader mode).\n"
+        f"7. Click Full Install to install the firmware, install all apps, and update the boot logo.\n"
+        f"8. Each step can also be done individually (Flash Firmware, Install All Apps, Update Boot Logo).\n"
+        f"9. Use Manage Channels to program channels in the radio. It is designed to work with this firmware,\n"
+        f"   so there is no need to use another software such as CHIRP at the moment.\n\n"
+        if gui_name
+        else ""
+    )
+    cli_step = (
+        "Alternative — Terminal / Command Line"
+        if gui_name
+        else "Flashing Instructions (Command Line)"
+    )
+
     return (
         f"Baofeng UV-5RM Complete Install Package {release_tag} ({target.label})\n"
         f"Firmware: {DEFAULT_FW_REPO} ({fw_tag})\n"
         f"Tool:     {DEFAULT_TOOL_REPO} ({tool_tag})\n\n"
         f"{os_note}"
-        f"{gui_line}"
+        f"{gui_section}"
         f"{cli_step}:\n"
-        f"1. Put radio into bootloader mode (hold Side1 + Side2 while turning Power ON), then run:\n"
+        f"1. Plug the radio in and put it into bootloader mode (hold Side Button 1 + Side Button 2 while turning Power ON), then run:\n"
         f"   {prefix}{cli_name} flash bf-uv-5rm-fw.BF\n\n"
-        f"2. Turn radio ON normally to the standby screen, then install all apps + boot logo:\n"
+        f"2. Turn the radio ON normally to the standby screen, then install all apps + boot logo:\n"
         f"   {prefix}{cli_name} install-all --apps-dir apps\n"
     )
 
@@ -446,8 +463,15 @@ def resolve_release_tag(target: str, repo: str | None = None) -> str:
 
 
 def make_release_notes(
-    tag: str, fw_repo: str, fw_tag: str, tool_repo: str, tool_tag: str, assets: list[Path]
+    tag: str,
+    fw_repo: str,
+    fw_tag: str,
+    tool_repo: str,
+    tool_tag: str,
+    assets: list[Path],
+    release_repo: str = DEFAULT_RELEASE_REPO,
 ) -> str:
+    raw_base = f"https://raw.githubusercontent.com/{release_repo}/main"
     lines = [
         f"Combined Baofeng UV-5RM release `{tag}`.",
         "",
@@ -455,11 +479,41 @@ def make_release_notes(
         f"- **Firmware:** `{fw_repo}` @ `{fw_tag}` (`bf-uv-5rm-fw.BF`, `apps/`, `logo/boot.png`)",
         f"- **Flashing Tool:** `{tool_repo}` @ `{tool_tag}` (`open-ht-tool` CLI + available GUI)",
         "",
-        "### Quick Start",
-        "1. Download and extract the zip for your computer (`mac-m1-bf-uv-5rm-...` for Apple Silicon Macs, `mac-intel-bf-uv-5rm-...` for Intel Macs, `windows-bf-uv-5rm-...` for Windows).",
-        "2. Open `QUICKSTART.txt` or launch `GUI_open-ht-tool` / `open-ht-tool` directly from the extracted folder:",
-        "   - Bootloader mode (`Side1 + Side2 + Power ON`): `./open-ht-tool flash bf-uv-5rm-fw.BF` (`open-ht-tool.exe` on Windows)",
-        "   - Normal standby mode: `./open-ht-tool install-all --apps-dir apps`",
+        "### Flashing Instructions",
+        "",
+        "1. **Download the release**",
+        "   - **Installer script (recommended — bypasses browser quarantine):**",
+        "     - **macOS:**",
+        "       ```sh",
+        f"       curl -fsSL -O {raw_base}/install.command",
+        "       chmod +x install.command",
+        "       ./install.command",
+        "       ```",
+        "     - **Linux:**",
+        "       ```sh",
+        f"       curl -fsSL -O {raw_base}/install.sh",
+        "       chmod +x install.sh",
+        "       ./install.sh",
+        "       ```",
+        "     - **Windows (Command Prompt):**",
+        "       ```bat",
+        f"       curl.exe -fsSL -o install.bat {raw_base}/install.bat",
+        "       install.bat",
+        "       ```",
+        f"       *(Or in PowerShell: `Invoke-WebRequest -Uri {raw_base}/install.bat -OutFile install.bat; .\\install.bat`)*",
+        "   - **Direct zip download:** Download and extract the zip for your computer from **Downloads** below (`mac-m1-bf-uv-5rm-...` for Apple Silicon Macs, `mac-intel-bf-uv-5rm-...` for Intel Macs, `windows-bf-uv-5rm-...` for Windows). On macOS, if downloaded via a browser, clear quarantine first: `xattr -cr /path/to/extracted-folder`.",
+        "2. **Navigate to the folder** where the release was installed or extracted.",
+        "3. **Plug the radio in** using your USB programming cable.",
+        "4. **Put the radio in bootloader mode:** hold **Side Button 1 + Side Button 2** while turning the radio **ON**.",
+        "5. **Open the GUI app** (`GUI_open-ht-tool.app` on macOS, `GUI_open-ht-tool.exe` on Windows, `GUI_open-ht-tool` on Linux).",
+        "6. **Verify or select the radio/USB port:** If the radio is not auto-detected, select the radio/USB port manually (and click **Detect Radio** if needed). If it still cannot be detected, something is wrong with the previous steps (check the cable connection, USB port/driver, and bootloader mode).",
+        "7. **Click Full Install** to install the firmware, install all apps, and update the boot logo.",
+        "8. **Individual steps (optional):** Each step can also be done individually (**Flash Firmware**, **Install All Apps**, or **Update Boot Logo**).",
+        "9. **Manage Channels:** Use **Manage Channels** to program channels in the radio. It is designed to work with this firmware so that there is no need to use another software such as CHIRP at the moment.",
+        "",
+        "#### Alternative — Command Line (CLI)",
+        "- Bootloader mode (`Side Button 1 + Side Button 2 + Power ON`): `./open-ht-tool flash bf-uv-5rm-fw.BF` (`open-ht-tool.exe` on Windows)",
+        "- Normal standby mode: `./open-ht-tool install-all --apps-dir apps`",
         "",
         "### Downloads",
     ]
@@ -598,7 +652,15 @@ def main() -> int:
             print(f"Created {len(assets)} release artifacts in dist/")
             return 0
 
-        notes = make_release_notes(tag, args.fw_repo, fw_tag, args.tool_repo, tool_tag, assets)
+        notes = make_release_notes(
+            tag,
+            args.fw_repo,
+            fw_tag,
+            args.tool_repo,
+            tool_tag,
+            assets,
+            release_repo=repo or DEFAULT_RELEASE_REPO,
+        )
         notes_file = ROOT / "dist" / f"RELEASE_NOTES_{tag}.md"
         notes_file.write_text(notes, encoding="utf-8")
         try:

@@ -179,16 +179,27 @@ echo ""
 echo "[OK] Installed ${ZIP_NAME} into:"
 echo "     ${TARGET_DIR}"
 echo ""
-echo "Next steps:"
-echo "  1. Bootloader mode (hold Side1 + Side2 + Power ON):"
-echo "     \"${TARGET_DIR}/open-ht-tool\" flash \"${TARGET_DIR}/bf-uv-5rm-fw.BF\""
-echo "  2. Normal standby mode (install overlay apps + boot logo):"
-echo "     \"${TARGET_DIR}/open-ht-tool\" install-all --apps-dir \"${TARGET_DIR}/apps\""
+GUI_BIN=""
 if [ -d "${TARGET_DIR}/GUI_open-ht-tool.app" ]; then
-    echo "  Or open the GUI: \"${TARGET_DIR}/GUI_open-ht-tool.app\""
-elif [ -f "${TARGET_DIR}/GUI_open-ht-tool" ] || [ -f "${TARGET_DIR}/GUI_open-ht-tool.exe" ]; then
-    echo "  Or launch the GUI: \"${TARGET_DIR}/GUI_open-ht-tool\""
+    GUI_BIN="${TARGET_DIR}/GUI_open-ht-tool.app"
+elif [ -f "${TARGET_DIR}/GUI_open-ht-tool.exe" ]; then
+    GUI_BIN="${TARGET_DIR}/GUI_open-ht-tool.exe"
+elif [ -f "${TARGET_DIR}/GUI_open-ht-tool" ]; then
+    GUI_BIN="${TARGET_DIR}/GUI_open-ht-tool"
 fi
+
+echo "Next steps:"
+if [ -n "$GUI_BIN" ]; then
+    echo "  1. Plug the radio in and put it in bootloader mode (hold Side Button 1 + Side Button 2 while turning Power ON)."
+    echo "  2. Open the GUI app: \"${GUI_BIN}\""
+    echo "  3. Verify/select your USB port and click Full Install (use Manage Channels to program channels)."
+else
+    echo "  1. Bootloader mode (hold Side Button 1 + Side Button 2 while turning Power ON):"
+    echo "     \"${TARGET_DIR}/open-ht-tool\" flash \"${TARGET_DIR}/bf-uv-5rm-fw.BF\""
+    echo "  2. Normal standby mode (install overlay apps + boot logo):"
+    echo "     \"${TARGET_DIR}/open-ht-tool\" install-all --apps-dir \"${TARGET_DIR}/apps\""
+fi
+echo "  See \"${TARGET_DIR}/QUICKSTART.txt\" for full flashing instructions."
 
 trap - ERR
 pause_exit 0

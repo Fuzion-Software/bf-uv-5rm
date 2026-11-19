@@ -24,12 +24,23 @@ DEFAULT_TOOL_REPO = "Fuzion-Software/open-ht-tool"
 SEMVER_RE = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)$")
 GITHUB_REPO_RE = re.compile(r"github\.com[:/]([^/]+/[^/]+?)(?:\.git)?/?$")
 
-PLATFORMS: tuple[tuple[str, str], ...] = (
-    ("windows-amd64", ".exe"),
-    ("linux-amd64", ""),
-    ("linux-arm64", ""),
-    ("darwin-amd64", ""),
-    ("darwin-arm64", ""),
+@dataclass(frozen=True)
+class PlatformTarget:
+    upstream_id: str
+    ext: str
+    bundle_prefix: str
+    label: str
+
+    def zip_name(self, release_tag: str) -> str:
+        return f"{self.bundle_prefix}-{release_tag}.zip"
+
+
+PLATFORMS: tuple[PlatformTarget, ...] = (
+    PlatformTarget("windows-amd64", ".exe", "windows-bf-uv-5rm", "Windows (64-bit)"),
+    PlatformTarget("darwin-arm64", "", "mac-m1-bf-uv-5rm", "Mac Apple Silicon (M1/M2/M3/M4)"),
+    PlatformTarget("darwin-amd64", "", "mac-intel-bf-uv-5rm", "Mac Intel"),
+    PlatformTarget("linux-amd64", "", "linux-x64-bf-uv-5rm", "Linux x64"),
+    PlatformTarget("linux-arm64", "", "linux-arm64-bf-uv-5rm", "Linux ARM64"),
 )
 
 
@@ -267,38 +278,46 @@ def find_fw_bundle_name(asset_names: list[str]) -> str:
 
 
 def make_quickstart_text(
-    platform: str,
-    ext: str,
+    target: PlatformTarget,
     cli_name: str,
     gui_name: str | None,
     release_tag: str,
     fw_tag: str,
     tool_tag: str,
 ) -> str:
-    prefix = "" if ext == ".exe" else "./"
+    prefix = "" if target.ext == ".exe" else "./"
     gui_line = (
-        f"Option A — GUI:\n  Launch {prefix}{gui_name} and use Full Install (or Flash Firmware / Install Apps).\n\n"
+        f"Option A — GUI (easiest):\n"
+        f"  Open {gui_name}, select your port, and click Full Install (or Flash / Install Apps).\n\n"
         if gui_name
         else ""
     )
-    cli_step = "Option B — CLI" if gui_name else "CLI Flashing & App Install"
-    chmod_note = (
-        ""
-        if ext == ".exe"
-        else f"  (If needed on macOS/Linux: chmod +x {cli_name}"
-        + (f" {gui_name}" if gui_name else "")
-        + ")\n\n"
-    )
+    cli_step = "Option B — Terminal / Command Line" if gui_name else "How to Flash & Install Apps"
+    if target.upstream_id.startswith("darwin-"):
+        os_note = (
+            "First time on Mac (if macOS blocks opening the downloaded tool):\n"
+            "  Open Terminal in this folder and run:\n"
+            "    xattr -cr .\n"
+            "  (Or Right-click -> Open, then click Open Anyway in System Settings -> Privacy & Security.)\n\n"
+        )
+    elif target.upstream_id.startswith("windows-"):
+        os_note = (
+            "First time on Windows (if Windows SmartScreen prompts):\n"
+            "  Click 'More info' -> 'Run anyway'.\n\n"
+        )
+    else:
+        os_note = ""
+
     return (
-        f"Baofeng UV-5RM Release Bundle {release_tag} ({platform})\n"
-        f"Upstream firmware: {DEFAULT_FW_REPO} ({fw_tag})\n"
-        f"Upstream tool:     {DEFAULT_TOOL_REPO} ({tool_tag})\n\n"
+        f"Baofeng UV-5RM Complete Install Package {release_tag} ({target.label})\n"
+        f"Firmware: {DEFAULT_FW_REPO} ({fw_tag})\n"
+        f"Tool:     {DEFAULT_TOOL_REPO} ({tool_tag})\n\n"
+        f"{os_note}"
         f"{gui_line}"
         f"{cli_step}:\n"
-        f"{chmod_note}"
-        f"1. Flash firmware (hold Side1 + Side2 while powering ON for bootloader mode):\n"
+        f"1. Put radio into bootloader mode (hold Side1 + Side2 while turning Power ON), then run:\n"
         f"   {prefix}{cli_name} flash bf-uv-5rm-fw.BF\n\n"
-        f"2. Reboot radio normally to standby screen, then install overlay apps + boot logo:\n"
+        f"2. Turn radio ON normally to the standby screen, then install all apps + boot logo:\n"
         f"   {prefix}{cli_name} install-all --apps-dir apps\n"
     )
 
@@ -337,17 +356,20 @@ def build_platform_bundles(
     bundles: list[Path] = []
     manifest: dict[str, list[str]] = {}
 
-    for platform, ext in PLATFORMS:
-        cli_name = f"open-ht-tool-{platform}{ext}"
-        cli_path = tool_dir / cli_name
+    for target in PLATFORMS:
+        src_cli_name = f"open-ht-tool-{target.upstream_id}{target.ext}"
+        cli_path = tool_dir / src_cli_name
         if not cli_path.is_file():
-            raise FileNotFoundError(f"Missing CLI binary in {tool_dir}: {cli_name}")
+            raise FileNotFoundError(f"Missing CLI binary in {tool_dir}: {src_cli_name}")
 
-        gui_name = f"open-ht-tool-gui-{platform}{ext}"
-        gui_path = tool_dir / gui_name
+        src_gui_name = f"open-ht-tool-gui-{target.upstream_id}{target.ext}"
+        gui_path = tool_dir / src_gui_name
         has_gui = gui_path.is_file()
 
-        zip_path = dist_dir / f"bf-uv-5rm-{release_tag}-{platform}.zip"
+        zip_cli_name = f"open-ht-tool{target.ext}"
+        zip_gui_name = f"GUI_open-ht-tool{target.ext}"
+
+        zip_path = dist_dir / target.zip_name(release_tag)
         included: list[str] = []
 
         with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
@@ -355,19 +377,18 @@ def build_platform_bundles(
                 write_zip_entry(zf, src_path, arcname, executable=False)
                 included.append(arcname)
 
-            is_unix = ext != ".exe"
-            write_zip_entry(zf, cli_path, cli_name, executable=is_unix)
-            included.append(cli_name)
+            is_unix = target.ext != ".exe"
+            write_zip_entry(zf, cli_path, zip_cli_name, executable=is_unix)
+            included.append(zip_cli_name)
 
             if has_gui:
-                write_zip_entry(zf, gui_path, gui_name, executable=is_unix)
-                included.append(gui_name)
+                write_zip_entry(zf, gui_path, zip_gui_name, executable=is_unix)
+                included.append(zip_gui_name)
 
             quickstart = make_quickstart_text(
-                platform=platform,
-                ext=ext,
-                cli_name=cli_name,
-                gui_name=gui_name if has_gui else None,
+                target=target,
+                cli_name=zip_cli_name,
+                gui_name=zip_gui_name if has_gui else None,
                 release_tag=release_tag,
                 fw_tag=fw_tag,
                 tool_tag=tool_tag,
@@ -411,16 +432,18 @@ def make_release_notes(
         f"- **Flashing Tool:** `{tool_repo}` @ `{tool_tag}` (`open-ht-tool` CLI + available GUI)",
         "",
         "### Quick Start",
-        "1. Download and extract the zip for your OS.",
-        "2. Run the GUI (`open-ht-tool-gui-*`) or use CLI:",
-        "   - Bootloader mode (`Side1 + Side2 + Power ON`): `open-ht-tool-* flash bf-uv-5rm-fw.BF`",
-        "   - Normal standby mode: `open-ht-tool-* install-all --apps-dir apps`",
+        "1. Download and extract the zip for your computer (`mac-m1-bf-uv-5rm-...` for Apple Silicon Macs, `mac-intel-bf-uv-5rm-...` for Intel Macs, `windows-bf-uv-5rm-...` for Windows).",
+        "2. Open `QUICKSTART.txt` or launch `GUI_open-ht-tool` / `open-ht-tool` directly from the extracted folder:",
+        "   - Bootloader mode (`Side1 + Side2 + Power ON`): `./open-ht-tool flash bf-uv-5rm-fw.BF` (`open-ht-tool.exe` on Windows)",
+        "   - Normal standby mode: `./open-ht-tool install-all --apps-dir apps`",
         "",
-        "### Bundles",
+        "### Downloads",
     ]
-    for a in assets:
-        if a.suffix == ".zip":
-            lines.append(f"- `{a.name}`")
+    by_name = {a.name: a for a in assets}
+    for target in PLATFORMS:
+        name = target.zip_name(tag)
+        if name in by_name:
+            lines.append(f"- `{name}` — {target.label}")
     return "\n".join(lines) + "\n"
 
 
@@ -492,8 +515,8 @@ def main() -> int:
             print(f"[dry-run] Would {action} {tag}")
             print(f"[dry-run] Firmware: {args.fw_repo} @ {fw_tag} ({fw_bundle_name})")
             print(f"[dry-run] Tool:     {args.tool_repo} @ {tool_tag}")
-            for platform, _ in PLATFORMS:
-                print(f"[dry-run] Bundle:   dist/bf-uv-5rm-{tag}-{platform}.zip")
+            for target in PLATFORMS:
+                print(f"[dry-run] Bundle:   dist/{target.zip_name(tag)} ({target.label})")
             print("[dry-run] Checksum: dist/SHA256SUMS")
             return 0
 
@@ -530,8 +553,10 @@ def main() -> int:
                 )
 
             dist_dir = ROOT / "dist"
-            for old in dist_dir.glob(f"bf-uv-5rm-{tag}-*.zip"):
-                old.unlink()
+            for target in PLATFORMS:
+                old = dist_dir / target.zip_name(tag)
+                if old.exists():
+                    old.unlink()
 
             assets, manifest = build_platform_bundles(
                 release_tag=tag,

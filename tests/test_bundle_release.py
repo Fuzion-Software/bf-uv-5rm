@@ -77,18 +77,32 @@ class BundleReleaseTests(unittest.TestCase):
             )
 
             self.assertEqual(len(assets), 6)  # 5 platform zips + SHA256SUMS
-            self.assertIn("open-ht-tool-gui-linux-amd64", manifest["bf-uv-5rm-v0.1.0-linux-amd64.zip"])
-            self.assertNotIn("open-ht-tool-gui-darwin-arm64", manifest["bf-uv-5rm-v0.1.0-darwin-arm64.zip"])
+            self.assertIn("open-ht-tool", manifest["linux-x64-bf-uv-5rm-v0.1.0.zip"])
+            self.assertIn("GUI_open-ht-tool", manifest["linux-x64-bf-uv-5rm-v0.1.0.zip"])
+            self.assertIn("open-ht-tool.exe", manifest["windows-bf-uv-5rm-v0.1.0.zip"])
+            self.assertIn("GUI_open-ht-tool.exe", manifest["windows-bf-uv-5rm-v0.1.0.zip"])
+            self.assertIn("open-ht-tool", manifest["mac-m1-bf-uv-5rm-v0.1.0.zip"])
+            self.assertNotIn("GUI_open-ht-tool", manifest["mac-m1-bf-uv-5rm-v0.1.0.zip"])
+            self.assertIn("open-ht-tool", manifest["mac-intel-bf-uv-5rm-v0.1.0.zip"])
+            self.assertIn("open-ht-tool", manifest["linux-arm64-bf-uv-5rm-v0.1.0.zip"])
 
-            lin_zip = dist / "bf-uv-5rm-v0.1.0-linux-amd64.zip"
+            lin_zip = dist / "linux-x64-bf-uv-5rm-v0.1.0.zip"
             with zipfile.ZipFile(lin_zip, "r") as zf:
-                cli_info = zf.getinfo("open-ht-tool-linux-amd64")
+                cli_info = zf.getinfo("open-ht-tool")
                 self.assertEqual((cli_info.external_attr >> 16) & 0o777, 0o755)
+                gui_info = zf.getinfo("GUI_open-ht-tool")
+                self.assertEqual((gui_info.external_attr >> 16) & 0o777, 0o755)
                 bf_info = zf.getinfo("bf-uv-5rm-fw.BF")
                 self.assertEqual((bf_info.external_attr >> 16) & 0o777, 0o644)
                 qs = zf.read("QUICKSTART.txt").decode("utf-8")
-                self.assertIn("open-ht-tool-gui-linux-amd64", qs)
-                self.assertIn("flash bf-uv-5rm-fw.BF", qs)
+                self.assertIn("GUI_open-ht-tool", qs)
+                self.assertIn("./open-ht-tool flash bf-uv-5rm-fw.BF", qs)
+
+            mac_zip = dist / "mac-m1-bf-uv-5rm-v0.1.0.zip"
+            with zipfile.ZipFile(mac_zip, "r") as zf:
+                mac_qs = zf.read("QUICKSTART.txt").decode("utf-8")
+                self.assertIn("xattr -cr .", mac_qs)
+                self.assertIn("./open-ht-tool flash bf-uv-5rm-fw.BF", mac_qs)
 
     def test_missing_app_in_fw_zip_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -113,8 +127,8 @@ class BundleReleaseTests(unittest.TestCase):
 
             tool_dir = root / "tools"
             tool_dir.mkdir()
-            for platform, ext in br.PLATFORMS:
-                (tool_dir / f"open-ht-tool-{platform}{ext}").write_bytes(b"CLI")
+            for target in br.PLATFORMS:
+                (tool_dir / f"open-ht-tool-{target.upstream_id}{target.ext}").write_bytes(b"CLI")
 
             repo_root = Path(__file__).resolve().parent.parent
             res = subprocess.run(
@@ -134,7 +148,9 @@ class BundleReleaseTests(unittest.TestCase):
                 capture_output=True,
                 check=True,
             )
-            self.assertIn("bf-uv-5rm-v0.0.0-linux-amd64.zip", res.stdout)
+            self.assertIn("mac-m1-bf-uv-5rm-v0.0.0.zip", res.stdout)
+            self.assertIn("mac-intel-bf-uv-5rm-v0.0.0.zip", res.stdout)
+            self.assertIn("windows-bf-uv-5rm-v0.0.0.zip", res.stdout)
 
     def test_fetch_release_metadata_surfaces_clear_error(self) -> None:
         from unittest import mock

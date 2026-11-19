@@ -17,15 +17,47 @@ Inside every zip, the tools are simply named `open-ht-tool` (and `GUI_open-ht-to
 
 ## End-User Quick Start
 
-### Option 1 — Double-Clickable Installer Script (Bypasses Browser Quarantine)
-- **macOS / Linux:** Double-click [`install.command`](install.command) (or run `./install.sh [target_dir]`) to automatically detect your OS/CPU (`mac-m1-bf-uv-5rm`, `mac-intel-bf-uv-5rm`, `linux-x64-bf-uv-5rm`, or `linux-arm64-bf-uv-5rm`), download the latest release zip via `curl`, and unzip it into the current directory (or `target_dir` if provided).
-- **Windows:** Double-click [`install.bat`](install.bat) (or run `install.bat [target_dir]`) to download and extract the latest `windows-bf-uv-5rm-<version>.zip` bundle into the current directory.
+### Option 1 — Installer Script (Bypasses Browser Quarantine)
+
+Download and run the installer script for your OS from the command line (this avoids browser quarantine flags), or double-click it after downloading:
+
+- **macOS:**
+  ```sh
+  curl -fsSL -O https://raw.githubusercontent.com/Fuzion-Software/bf-uv-5rm/main/install.command
+  chmod +x install.command
+  ./install.command
+  ```
+  *(Or double-click [`install.command`](install.command) in Finder; pass an optional `[target_dir]` when running from Terminal.)*
+
+- **Linux:**
+  ```sh
+  curl -fsSL -O https://raw.githubusercontent.com/Fuzion-Software/bf-uv-5rm/main/install.sh
+  chmod +x install.sh
+  ./install.sh
+  ```
+  *(Pass an optional `[target_dir]` to extract into a specific folder.)*
+
+- **Windows (Command Prompt):**
+  ```bat
+  curl.exe -fsSL -o install.bat https://raw.githubusercontent.com/Fuzion-Software/bf-uv-5rm/main/install.bat
+  install.bat
+  ```
+  *(Or in PowerShell: `Invoke-WebRequest -Uri https://raw.githubusercontent.com/Fuzion-Software/bf-uv-5rm/main/install.bat -OutFile install.bat; .\install.bat`. You can also double-click [`install.bat`](install.bat) or pass `[target_dir]`.)*
 
 ### Option 2 — Direct Release Zip
 1. Download and extract the zip for your computer.
-2. **Option A — GUI:**
+2. **macOS only (if downloaded via a web browser):** macOS Gatekeeper attaches a quarantine attribute to browser downloads and may block unsigned scripts or binaries ("cannot be opened because the developer cannot be verified"). Clear it in Terminal before running:
+   ```sh
+   # Clear quarantine on an extracted release folder:
+   xattr -cr /path/to/extracted-folder
+
+   # Or, if you downloaded install.command via a browser:
+   xattr -cr ~/Downloads/install.command
+   chmod +x ~/Downloads/install.command
+   ```
+3. **Option A — GUI:**
    Open `GUI_open-ht-tool` (`GUI_open-ht-tool.exe` on Windows) directly from the extracted folder (it auto-detects `bf-uv-5rm-fw.BF`, `apps/`, and `logo/boot.png` next to it).
-3. **Option B — Command Line:**
+4. **Option B — Command Line:**
    ```sh
    # 1. Bootloader mode (hold Side1 + Side2 while powering ON):
    ./open-ht-tool flash bf-uv-5rm-fw.BF

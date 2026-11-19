@@ -362,12 +362,12 @@ def build_platform_bundles(
         if not cli_path.is_file():
             raise FileNotFoundError(f"Missing CLI binary in {tool_dir}: {src_cli_name}")
 
-        src_gui_name = f"open-ht-tool-gui-{target.upstream_id}{target.ext}"
-        gui_path = tool_dir / src_gui_name
-        has_gui = gui_path.is_file()
-
         src_mac_app_zip = tool_dir / f"open-ht-tool-gui-{target.upstream_id}.app.zip"
         has_mac_app = target.upstream_id.startswith("darwin-") and src_mac_app_zip.is_file()
+
+        src_gui_name = f"open-ht-tool-gui-{target.upstream_id}{target.ext}"
+        gui_path = tool_dir / src_gui_name
+        has_gui = gui_path.is_file() and not has_mac_app
 
         zip_cli_name = f"open-ht-tool{target.ext}"
         zip_gui_name = f"GUI_open-ht-tool{target.ext}"

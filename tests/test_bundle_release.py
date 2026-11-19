@@ -86,7 +86,8 @@ class BundleReleaseTests(unittest.TestCase):
             self.assertIn("open-ht-tool", manifest["mac-intel-bf-uv-5rm-v0.1.0.zip"])
             self.assertIn("open-ht-tool", manifest["linux-arm64-bf-uv-5rm-v0.1.0.zip"])
 
-            # Verify macOS .app.zip repackaging as GUI_open-ht-tool.app
+            # Verify macOS .app.zip repackaging as GUI_open-ht-tool.app omits raw GUI binary
+            (tool_dir / "open-ht-tool-gui-darwin-arm64").write_bytes(b"MACRAWGUI")
             mac_app_zip = tool_dir / "open-ht-tool-gui-darwin-arm64.app.zip"
             with zipfile.ZipFile(mac_app_zip, "w") as zf:
                 zf.writestr("open-ht-tool.app/Contents/Info.plist", "<plist/>")
@@ -103,6 +104,7 @@ class BundleReleaseTests(unittest.TestCase):
                 "GUI_open-ht-tool.app/Contents/MacOS/open-ht-tool-gui",
                 mac_manifest["mac-m1-bf-uv-5rm-v0.1.0.zip"],
             )
+            self.assertNotIn("GUI_open-ht-tool", mac_manifest["mac-m1-bf-uv-5rm-v0.1.0.zip"])
 
             lin_zip = dist / "linux-x64-bf-uv-5rm-v0.1.0.zip"
             with zipfile.ZipFile(lin_zip, "r") as zf:
